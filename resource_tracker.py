@@ -1,5 +1,13 @@
 
- 
+
+class ResourceTypeNotFoundException(Exception):
+    pass
+
+
+class ResourceNotFoundException(Exception):
+    pass
+
+
 class ResourceType(object):
 
     IMAGES = 'images'
@@ -35,13 +43,12 @@ class ResourceTracker(object):
         
         fallback_enabled = kwargs.pop('fallback', True)
         if resource_type not in ResourceType.resource_types:
-            raise Exception(
+            raise ResourceTypeNotFoundException(
                 'Resource type of ' + resource_type + ' not found. '
                 'Expected resource types are ' + str(ResourceType.resource_types))
         
         
         resources = self.provider.get_resources_by_type(resource_type)
-        print resources
         available_resources = [
             resource for resource in resources
             if not resource.get('is_used')]
@@ -66,11 +73,4 @@ class ResourceTracker(object):
                 return selected_resource
         
         # If no resources are found, raise an exception
-        raise Exception('No resources of type ' + resource_type + ' remaining')
-        
-
-#r = ResourceTracker()
-#r.requires('images', size='1 GB', boot='fast')
-#print r.requires('images')
-#print r.requires('images')
-#print r.requires('images')
+        raise ResourceNotFoundException('No resources of type ' + resource_type + ' remaining.')
