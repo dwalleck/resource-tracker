@@ -8,19 +8,10 @@ class ResourceNotFoundException(Exception):
     pass
 
 
-class ResourceType(object):
+class ResourceRepository(object):
 
-    IMAGES = 'images'
-    FLAVORS = 'flavors'
-    SHARED_NETWORKS = 'shared_networks'
-    
-    resource_types = [IMAGES, FLAVORS, SHARED_NETWORKS]
-
-
-class ResourceProvider(object):
-    
     def __init__(self):
-        
+        # Load the ResourceConfiguration
         
         self.resources = {
             'images': [
@@ -31,32 +22,43 @@ class ResourceProvider(object):
             ]
         }
     
-    def get_resources_by_type(self, resource_type):
+    def get_resource_types(self):
+        return self.resources.keys()
+    
+    def get_available_resources_by_type(self, resource_type):
+        resources = self.resources.get(resource_type)
+        return filter(lambda x: not x.get('is_used'), resources)
+    
+    def get_all_resources_by_type(self, resource_type):
         return self.resources.get(resource_type)
+            
+    def claim_resource(self, resource_type, resource_name):
+        resources = self.get_all_resources_by_type(resource_type)
+        filtered_resources = [resource for resource in resources
+                              if resource.get('resource_name') == resource_name]
+        filtered_resources[0]['is_used'] = True
+    
 
-
-class ResourceTracker(object):
+class ResourceProvider(object):
 
     def __init__(self):
-        self.provider = ResourceProvider()
-        
+        # Get an instance of the ResourceRepository
+        self.repository = ResourceRepository()
+    
     def requires(self, resource_type, **kwargs):
         
-        fallback_enabled = kwargs.pop('fallback', True)
-        if resource_type not in ResourceType.resource_types:
+        resource_types = self.repository.get_resource_types()
+        if resource_type not in resource_types:
             raise ResourceTypeNotFoundException(
                 'Resource type of ' + resource_type + ' not found. '
-                'Expected resource types are ' + str(ResourceType.resource_types))
+                'Expected resource types are ' + str(resource_types))
         
+        fallback_enabled = kwargs.pop('fallback', False)
+        available_resources = self.repository.get_available_resources_by_type(resource_type)
         
-        resources = self.provider.get_resources_by_type(resource_type)
-        available_resources = [
-            resource for resource in resources
-            if not resource.get('is_used')]
-
         if available_resources:
             # Apply all provided filters
-            filtered_resources = available_resources
+            filtered_resources = list(available_resources)
             for k, v in kwargs.iteritems():
                 filtered_resources = [
                     resource for resource in filtered_resources
@@ -70,8 +72,9 @@ class ResourceTracker(object):
                 # Unless fallback is disabled, return a resource of the correct type
                 selected_resource = available_resources[0]
             if selected_resource:
-                selected_resource['is_used'] = True
+                self.repository.claim_resource(
+                    resource_type, selected_resource.get('resource_name'))
                 return selected_resource
         
         # If no resources are found, raise an exception
-        raise ResourceNotFoundException('No resources of type ' + resource_type + ' remaining.')
+        raise ResourceNotFoundException('No resources of type {resource_type} remaining.'.format(resource_type=resource_type))
